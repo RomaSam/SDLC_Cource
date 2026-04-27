@@ -35,7 +35,7 @@ Cinema/
 └── .gitignore
 
 .claude/commands/
-├── db_init/          # /db_init [--recreate] — create or recreate cinema.db
+├── db_create/          # /db_create [--recreate] — create or recreate cinema.db
 ├── git-commit/       # /git-commit — generate conventional commit message
 └── add-test/         # /add-test <file> — generate test skeleton
 ```
@@ -47,10 +47,16 @@ Cinema/
 pip install -r requirements.txt
 
 # Create database (first time)
-/db_init
+/db_create
 
 # Recreate database from scratch (drops all data)
-/db_init --recreate
+/db_create --recreate
+
+# Create and seed with 10 rows of realistic test data
+/db_create --init
+
+# Recreate and seed in one step
+/db_create --recreate --init
 ```
 
 > SQLite is part of Python's standard library — no extra install needed.
