@@ -1,3 +1,5 @@
+"""Cinema MCP resources — read-only data exposed to the AI context."""
+
 import json
 from datetime import date
 

@@ -64,9 +64,12 @@ C:\SDLC_Cource\
 │   │   ├── config.py                 # Settings: API_KEY + API_BASE_URL (reads Cinema/.env)
 │   │   ├── requirements.txt          # MCP dependencies: mcp[cli], httpx, pydantic-settings
 │   │   ├── .env.example              # Template: API_KEY, API_BASE_URL
-│   │   ├── tools/__init__.py         # MCP tools: list/get/create/replace/patch/delete screening
-│   │   ├── resources/__init__.py     # MCP resources: screenings, genres, halls, today's screenings
-│   │   └── prompts/__init__.py       # MCP prompts: find_movie, summarise_schedule, hall_availability
+│   │   ├── tools/
+│   │   │   └── mcp_tools.py          # MCP tools: list/get/create/replace/patch/delete screening
+│   │   ├── resources/
+│   │   │   └── mcp_resources.py      # MCP resources: screenings, genres, halls, today's screenings
+│   │   └── prompts/
+│   │       └── mcp_prompts.py        # MCP prompts: find_movie, summarise_schedule, hall_availability
 │   │
 │   └── claude_tools/
 │       └── hooks/

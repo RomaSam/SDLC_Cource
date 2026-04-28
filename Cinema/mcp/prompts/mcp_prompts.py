@@ -1,4 +1,4 @@
-﻿"""Cinema MCP prompts — reusable AI command templates."""
+"""Cinema MCP prompts — reusable AI command templates."""
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import PromptMessage, TextContent
