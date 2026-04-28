@@ -1,0 +1,1 @@
+- [Cinema API Skill Review Findings](project_cinema_api_skill.md) — Critical Pydantic v2 validator crash + db_path bug + sqlite3 with-block misconception confirmed in SKILL.md

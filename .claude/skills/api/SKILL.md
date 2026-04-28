@@ -43,7 +43,7 @@ uvicorn
 
 ## Project layout
 
-All API files live under `Cinema/`:
+All API files live under `Cinema/`. Run `uvicorn` from `Cinema/` — it adds that directory to `sys.path`, which is how all absolute imports resolve. No `__init__.py` files are needed anywhere.
 
 ```
 Cinema/
@@ -99,9 +99,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     api_key: str
-    db_path: str = "Cinema/db/cinema.db"
+    db_path: str = "db/cinema.db"  # relative to Cinema/ where uvicorn runs
 
-    model_config = SettingsConfigDict(env_file="Cinema/.env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
 ```
@@ -150,12 +150,17 @@ def get_connection() -> sqlite3.Connection:
     return conn
 ```
 
-Always open connections inside a `with` block so they close automatically:
+The `with conn` context manager commits on success and rolls back on exception — it does **not** close the connection. Always wrap with `contextlib.closing` to release the file descriptor immediately:
 
 ```python
-with get_connection() as conn:
-    ...
+from contextlib import closing
+
+with closing(get_connection()) as conn:
+    with conn:   # commit / rollback
+        ...
 ```
+
+Apply this pattern in every repository method.
 
 ---
 
@@ -170,6 +175,7 @@ This keeps PUT safe with literal SQL and confines dynamic SQL to PATCH where it 
 ```python
 import sqlite3
 from abc import ABC, abstractmethod
+from contextlib import closing
 from domain.screening import Screening
 from infrastructure.db import get_connection
 
@@ -224,10 +230,11 @@ def _row_to_entity(row: sqlite3.Row) -> Screening:
 class SQLiteScreeningRepository(IScreeningRepository):
 
     def get_by_id(self, screening_id: int) -> Screening | None:
-        with get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM screening WHERE id = ?", (screening_id,)
-            ).fetchone()
+        with closing(get_connection()) as conn:
+            with conn:
+                row = conn.execute(
+                    "SELECT * FROM screening WHERE id = ?", (screening_id,)
+                ).fetchone()
         return _row_to_entity(row) if row else None
 
     def list_all(
@@ -249,71 +256,75 @@ class SQLiteScreeningRepository(IScreeningRepository):
             filters.append("hall = ?")
             params.append(hall)
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
-        with get_connection() as conn:
-            rows = conn.execute(
-                f"SELECT * FROM screening {where}", params
-            ).fetchall()
+        with closing(get_connection()) as conn:
+            with conn:
+                rows = conn.execute(
+                    f"SELECT * FROM screening {where}", params
+                ).fetchall()
         return [_row_to_entity(r) for r in rows]
 
     def create(self, screening: Screening) -> Screening:
-        with get_connection() as conn:
-            cur = conn.execute(
-                "INSERT INTO screening"
-                " (name, genre, duration_minutes, screening_date, begins_at, hall, seats)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    screening.name, screening.genre, screening.duration_minutes,
-                    screening.screening_date, screening.begins_at,
-                    screening.hall, screening.seats,
-                ),
-            )
-            row = conn.execute(
-                "SELECT * FROM screening WHERE id = ?", (cur.lastrowid,)
-            ).fetchone()
+        with closing(get_connection()) as conn:
+            with conn:
+                cur = conn.execute(
+                    "INSERT INTO screening"
+                    " (name, genre, duration_minutes, screening_date, begins_at, hall, seats)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        screening.name, screening.genre, screening.duration_minutes,
+                        screening.screening_date, screening.begins_at,
+                        screening.hall, screening.seats,
+                    ),
+                )
+                row = conn.execute(
+                    "SELECT * FROM screening WHERE id = ?", (cur.lastrowid,)
+                ).fetchone()
         return _row_to_entity(row)
 
     def replace(self, screening_id: int, screening: Screening) -> Screening | None:
-        with get_connection() as conn:
-            cur = conn.execute(
-                "UPDATE screening"
-                " SET name=?, genre=?, duration_minutes=?, screening_date=?, begins_at=?, hall=?, seats=?"
-                " WHERE id=?",
-                (
-                    screening.name, screening.genre, screening.duration_minutes,
-                    screening.screening_date, screening.begins_at,
-                    screening.hall, screening.seats, screening_id,
-                ),
-            )
-            if cur.rowcount == 0:
-                return None
-            row = conn.execute(
-                "SELECT * FROM screening WHERE id = ?", (screening_id,)
-            ).fetchone()
+        with closing(get_connection()) as conn:
+            with conn:
+                cur = conn.execute(
+                    "UPDATE screening"
+                    " SET name=?, genre=?, duration_minutes=?, screening_date=?, begins_at=?, hall=?, seats=?"
+                    " WHERE id=?",
+                    (
+                        screening.name, screening.genre, screening.duration_minutes,
+                        screening.screening_date, screening.begins_at,
+                        screening.hall, screening.seats, screening_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    return None
+                row = conn.execute(
+                    "SELECT * FROM screening WHERE id = ?", (screening_id,)
+                ).fetchone()
         return _row_to_entity(row)
 
     def patch(self, screening_id: int, data: dict) -> Screening | None:
-        if not data:
-            return self.get_by_id(screening_id)
-        # Whitelist: only allow known column names — never use raw user-supplied keys in SQL.
+        # If data is empty or all keys fail the whitelist, return the current state unchanged (no-op, 200 OK).
         safe = {k: v for k, v in data.items() if k in _PATCH_COLUMNS}
         if not safe:
             return self.get_by_id(screening_id)
+        # Whitelist ensures only known column names appear in the SET clause.
         sets = ", ".join(f"{col} = ?" for col in safe)
         params: list[object] = list(safe.values()) + [screening_id]
-        with get_connection() as conn:
-            cur = conn.execute(
-                f"UPDATE screening SET {sets} WHERE id = ?", params
-            )
-            if cur.rowcount == 0:
-                return None
-            row = conn.execute(
-                "SELECT * FROM screening WHERE id = ?", (screening_id,)
-            ).fetchone()
+        with closing(get_connection()) as conn:
+            with conn:
+                cur = conn.execute(
+                    f"UPDATE screening SET {sets} WHERE id = ?", params
+                )
+                if cur.rowcount == 0:
+                    return None
+                row = conn.execute(
+                    "SELECT * FROM screening WHERE id = ?", (screening_id,)
+                ).fetchone()
         return _row_to_entity(row)
 
     def delete(self, screening_id: int) -> bool:
-        with get_connection() as conn:
-            cur = conn.execute("DELETE FROM screening WHERE id = ?", (screening_id,))
+        with closing(get_connection()) as conn:
+            with conn:
+                cur = conn.execute("DELETE FROM screening WHERE id = ?", (screening_id,))
         return cur.rowcount > 0
 ```
 
@@ -326,32 +337,36 @@ class SQLiteScreeningRepository(IScreeningRepository):
 ### Request schemas — `Cinema/interfaces/schemas/screening_request.py`
 
 ```python
-import re
+from datetime import datetime
 from typing import Annotated
 from pydantic import BaseModel, Field, field_validator
 
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_TIME_RE = re.compile(r"^\d{2}:\d{2}$")
-
 
 class _ScreeningBase(BaseModel):
-    @field_validator("screening_date", mode="before")
+    # check_fields=False is required because the validated fields are defined on
+    # subclasses, not on _ScreeningBase itself. Without it Pydantic v2 raises
+    # PydanticUserError at import time and the application refuses to start.
+    @field_validator("screening_date", mode="before", check_fields=False)
     @classmethod
     def validate_date(cls, v: object) -> object:
         if v is None:
             return v
-        if not _DATE_RE.match(str(v)):
-            raise ValueError("Must be ISO 8601 format: YYYY-MM-DD")
-        return v
+        try:
+            datetime.strptime(str(v), "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Must be a valid calendar date in YYYY-MM-DD format")
+        return str(v)
 
-    @field_validator("begins_at", mode="before")
+    @field_validator("begins_at", mode="before", check_fields=False)
     @classmethod
     def validate_time(cls, v: object) -> object:
         if v is None:
             return v
-        if not _TIME_RE.match(str(v)):
-            raise ValueError("Must be HH:MM format")
-        return v
+        try:
+            datetime.strptime(str(v), "%H:%M")
+        except ValueError:
+            raise ValueError("Must be a valid time in HH:MM format")
+        return str(v)
 
 
 class CreateScreeningRequest(_ScreeningBase):
@@ -394,6 +409,8 @@ class ScreeningResponse(BaseModel):
 
     @classmethod
     def from_entity(cls, s: Screening) -> ScreeningResponse:
+        if s.id is None:
+            raise ValueError("Cannot serialize an unpersisted Screening (id is None)")
         return cls(
             id=s.id,
             name=s.name,
@@ -502,7 +519,10 @@ def patch_screening(
     body: PatchScreeningRequest,
     repo: IScreeningRepository = Depends(get_screening_repo),
 ) -> ScreeningResponse:
-    data = body.model_dump(exclude_unset=True, exclude_none=True)
+    # exclude_unset=True: skip fields the client didn't send at all.
+    # Do NOT add exclude_none=True — that would silently swallow {"genre": null},
+    # preventing clients from intentionally clearing the nullable genre field.
+    data = body.model_dump(exclude_unset=True)
     updated = repo.patch(screening_id, data)
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -585,8 +605,10 @@ Interactive docs available at `http://localhost:8000/docs`.
 - Never interpolate user-supplied data into SQL strings — always use `?` placeholders for values.
 - When column names must be dynamic (PATCH only), validate them against `_PATCH_COLUMNS` before use.
 - Never put HTTP status codes or `HTTPException` inside the repository.
-- Never define validators with a narrower type (`str`) on a base class when subclasses override the field to `str | None` — use `mode="before"` and guard against `None` explicitly.
+- Never define validators on `_ScreeningBase` without `check_fields=False` — Pydantic v2 raises `PydanticUserError` at import time if the validated field is not defined on the base class itself.
+- Never use `exclude_none=True` in the PATCH router's `model_dump()` — it silently drops `{"genre": null}`, preventing clients from clearing nullable fields.
 - Use `replace()` for PUT and `patch()` for PATCH — they are not interchangeable.
+- Always wrap `get_connection()` with `contextlib.closing` — `with conn` alone only commits/rolls back; it does not close the connection.
 
 ---
 
@@ -602,3 +624,4 @@ Interactive docs available at `http://localhost:8000/docs`.
 - [ ] `requirements.txt` contains `fastapi`, `pydantic-settings`, `uvicorn`.
 - [ ] Smoke test: `curl -H "X-API-Key: <key>" http://localhost:8000/screenings/` returns a JSON array.
 - [ ] OpenAPI docs load at `http://localhost:8000/docs` without errors.
+- [ ] Run `/add-test infrastructure/screening_repository.py` to generate repository tests, then `/add-test interfaces/routers/screenings.py` for router tests.
