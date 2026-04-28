@@ -36,7 +36,7 @@
           },
           {
             "type": "command",
-            "command": "py -3 -m pytest --tb=short -q; ec=$?; [ $ec -eq 5 ] && exit 0 || exit $ec",
+            "command": "py -3 .claude/hooks/pytest_check.py",
             "timeout": 60,
             "statusMessage": "Running pytest..."
           }
