@@ -1,0 +1,1 @@
+- [Cinema project test patterns](project_test_patterns.md) — shared-cache SQLite fixtures, patch target, and repo fixture wiring for SQLiteScreeningRepository tests
