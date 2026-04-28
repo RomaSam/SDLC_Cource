@@ -42,8 +42,8 @@ Target: $ARGUMENTS
    HALLS = ['Hall A', 'Hall B', 'Hall C']
    TIMES = ['10:00', '12:30', '15:00', '17:30', '20:00', '22:30']
 
-   date1 = datetime.date(2026, 5, 1).isoformat()
-   date2 = datetime.date(2026, 5, 2).isoformat()
+   date1 = datetime.date.today().isoformat()
+   date2 = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
    rows = []
    for i, (name, genre, duration) in enumerate(MOVIES):
        date = date1 if i < 5 else date2
