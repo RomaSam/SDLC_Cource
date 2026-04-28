@@ -43,10 +43,10 @@ uvicorn
 
 ## Project layout
 
-All API files live under `Cinema/`. Run `uvicorn` from `Cinema/` — it adds that directory to `sys.path`, which is how all absolute imports resolve. No `__init__.py` files are needed anywhere.
+All API files live under `Cinema/api`. Run `uvicorn` from `Cinema/api` — it adds that directory to `sys.path`, which is how all absolute imports resolve. No `__init__.py` files are needed anywhere.
 
 ```
-Cinema/
+Cinema/api
 ├── main.py                              # FastAPI app factory + router registration
 ├── config.py                            # Typed settings via pydantic-settings
 ├── dependencies.py                      # FastAPI dependencies: auth + repository injection
@@ -115,7 +115,7 @@ API_KEY=your-secret-key-here
 
 ## Domain entity
 
-**`Cinema/domain/screening.py`**
+**`Cinema/api/domain/screening.py`**
 
 ```python
 from dataclasses import dataclass
@@ -138,7 +138,7 @@ No ORM annotations, no Pydantic, no FastAPI — this is the source of truth for 
 
 ## Database helper
 
-**`Cinema/infrastructure/db.py`**
+**`Cinema/api/infrastructure/db.py`**
 
 ```python
 import sqlite3
@@ -170,7 +170,7 @@ Apply this pattern in every repository method.
 `patch` uses a dynamic SET clause restricted to a column whitelist (PATCH — partial update).
 This keeps PUT safe with literal SQL and confines dynamic SQL to PATCH where it is unavoidable.
 
-**`Cinema/infrastructure/screening_repository.py`**
+**`Cinema/api/infrastructure/screening_repository.py`**
 
 ```python
 import sqlite3
@@ -334,7 +334,7 @@ class SQLiteScreeningRepository(IScreeningRepository):
 
 `_ScreeningBase` holds the shared validators. Both request schemas inherit from it so the validators work correctly for both required (`str`) and optional (`str | None`) fields without type conflicts.
 
-### Request schemas — `Cinema/interfaces/schemas/screening_request.py`
+### Request schemas — `Cinema/api/interfaces/schemas/screening_request.py`
 
 ```python
 from datetime import datetime
@@ -389,7 +389,7 @@ class PatchScreeningRequest(_ScreeningBase):
     seats: Annotated[int | None, Field(default=None, gt=0, le=10000)]
 ```
 
-### Response schema — `Cinema/interfaces/schemas/screening_response.py`
+### Response schema — `Cinema/api/interfaces/schemas/screening_response.py`
 
 ```python
 from __future__ import annotations
@@ -427,7 +427,7 @@ class ScreeningResponse(BaseModel):
 
 ## Authentication
 
-**`Cinema/dependencies.py`**
+**`Cinema/api/dependencies.py`**
 
 ```python
 from fastapi import Header, HTTPException, status
@@ -453,7 +453,7 @@ Apply auth at the **router level** using `dependencies=[Depends(verify_api_key)]
 
 ## Router (controller)
 
-**`Cinema/interfaces/routers/screenings.py`**
+**`Cinema/api/interfaces/routers/screenings.py`**
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -542,7 +542,7 @@ def delete_screening(
 
 ## Application factory
 
-**`Cinema/main.py`**
+**`Cinema/api/main.py`**
 
 ```python
 from fastapi import FastAPI

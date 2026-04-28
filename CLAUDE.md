@@ -27,7 +27,7 @@ See `schema.sql` for the full DDL. Single table: `screening` — one row per scr
 ## Project structure
 
 ```
-Cinema/
+Cinema/api
 ├── schema.sql        # DDL — source of truth for DB structure
 ├── requirements.txt  # Python dependencies
 ├── cinema.db         # SQLite database (git-ignored)
