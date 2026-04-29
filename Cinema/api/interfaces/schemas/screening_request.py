@@ -52,9 +52,8 @@ class PatchScreeningRequest(_ScreeningBase):
     hall: Annotated[str | None, Field(default=None, min_length=1, max_length=50)]
     seats: Annotated[int | None, Field(default=None, gt=0, le=MAX_SEATS)]
 
-    @model_validator(mode="before")
-    @classmethod
-    def at_least_one_field(cls, values: object) -> object:
-        if isinstance(values, dict) and not values:
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> "PatchScreeningRequest":
+        if not self.model_fields_set:
             raise ValueError("At least one field must be provided for a partial update")
-        return values
+        return self

@@ -2,7 +2,7 @@
 name: db_create
 description: Create or recreate the Cinema SQLite database from schema.sql
 allowed-tools: Bash(py *), Bash(python3 *), Bash(test *), Bash(ls *)
-argument-hint: [--recreate] [--init]
+argument-hint: "[--recreate] [--init]"
 ---
 
 Target: $ARGUMENTS

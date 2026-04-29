@@ -15,7 +15,7 @@ router = APIRouter(
 @router.get("/", response_model=list[ScreeningResponse])
 def list_screenings(
     genre: str | None = Query(default=None),
-    date: str | None = Query(default=None),
+    date: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     hall: str | None = Query(default=None),
     repo: IScreeningRepository = Depends(get_screening_repo),
 ) -> list[ScreeningResponse]:
